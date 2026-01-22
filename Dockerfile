@@ -12,19 +12,33 @@ RUN sed -i 's/Listen 80/Listen 8080/' \
     /etc/apache2/ports.conf \
     /etc/apache2/sites-available/000-default.conf
 
-# 3. Habilitar mod_rewrite (opcional pero recomendado)
+# 3. Habilitar mod_rewrite
 RUN a2enmod rewrite
 
-# 4. Copiar SOLO index.php desde src al DocumentRoot real
+# 4. Copiar index.php
 COPY src/index.php /var/www/html/index.php
 
-# (opcional) si tienes otros assets
-# COPY src/assets /var/www/html/assets
+# 5. Copiar init.sql
+COPY sql/init.sql /sql/init.sql
 
-# 5. Permisos
+# 6. Permisos
 RUN chown -R www-data:www-data /var/www/html
 
-# 6. Entrypoint mínimo (sin lógica extra)
+# 7. Entrypoint que inicializa la BD y luego arranca Apache
+RUN printf '%s\n' \
+'#!/bin/bash' \
+'set -e' \
+'' \
+'if [ -n "$DATABASE_URL" ] && [ -f /sql/init.sql ]; then' \
+'  echo "Inicializando base de datos..."' \
+'  psql "$DATABASE_URL" -f /sql/init.sql || true' \
+'fi' \
+'' \
+'exec apache2-foreground' \
+> /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8080
 
-CMD ["apache2-foreground"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
